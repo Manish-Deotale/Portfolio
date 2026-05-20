@@ -547,7 +547,7 @@ function App() {
                 Projects
               </motion.span>
               <motion.h2 variants={sectionFade}>
-                Selected work pulled directly from your resume highlights.
+                Platforms and products built for scale, reliability, and real-world impact.
               </motion.h2>
             </motion.div>
 
