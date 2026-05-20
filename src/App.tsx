@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
   FiArrowRight,
@@ -16,6 +16,7 @@ import {
   FiServer,
 } from 'react-icons/fi';
 import resumePdf from './assets/Manish Deotale.pdf';
+import Projects from './components/Projects';
 
 const navigation = ['Profile', 'Experience', 'Projects', 'Skills', 'Education', 'Contact'];
 
@@ -74,30 +75,6 @@ const experience = [
   },
 ];
 
-const projects = [
-  {
-    title: 'AgriStack Platform',
-    year: '2023 - 2025',
-    summary:
-      'Backend services for large agricultural registry datasets, built to improve accessibility, stability, and performance at national scale.',
-    accent: 'Registry Data',
-  },
-  {
-    title: 'NADP Digital Learning Platform',
-    year: '2022 - 2023',
-    summary:
-      'RESTful APIs and PostgreSQL data structures for classes, users, and learning content across a high-volume digital learning ecosystem.',
-    accent: 'Learning APIs',
-  },
-  {
-    title: 'Polymed CRM',
-    year: '2022',
-    summary:
-      'CRM platform for sales operations and customer relationship management, shaped around an API-centric integration model.',
-    accent: 'Enterprise CRM',
-  },
-];
-
 const skillGroups = [
   {
     title: 'Languages',
@@ -130,7 +107,30 @@ const easeOut = [0.22, 1, 0.36, 1] as const;
 function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
+  const scrollTrackRef = useRef<HTMLDivElement>(null);
   const shouldReduceMotion = useReducedMotion();
+
+  const getScrollMax = useCallback(() => {
+    const { scrollHeight, clientHeight } = document.documentElement;
+    return Math.max(0, scrollHeight - clientHeight);
+  }, []);
+
+  const setScrollFromClientX = useCallback(
+    (clientX: number, behavior: ScrollBehavior) => {
+      const track = scrollTrackRef.current;
+      if (!track) return;
+      const rect = track.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const max = getScrollMax();
+      const top = ratio * max;
+      if (behavior === 'instant') {
+        document.documentElement.scrollTop = top;
+      } else {
+        window.scrollTo({ top, behavior });
+      }
+    },
+    [getScrollMax],
+  );
 
   useEffect(() => {
     const onScroll = () => {
@@ -230,13 +230,79 @@ function App() {
     setIsMenuOpen(false);
   };
 
+  const scrollStep = useCallback(() => document.documentElement.clientHeight * 0.12, []);
+
+  const handleScrollTrackPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    const behavior: ScrollBehavior = shouldReduceMotion ? 'auto' : 'smooth';
+    setScrollFromClientX(event.clientX, behavior);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleScrollTrackPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    setScrollFromClientX(event.clientX, 'instant');
+  };
+
+  const handleScrollTrackPointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const handleScrollTrackKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const el = document.documentElement;
+    const max = getScrollMax();
+    const step = scrollStep();
+    if (event.key === 'Home') {
+      event.preventDefault();
+      window.scrollTo({ top: 0, behavior: shouldReduceMotion ? 'auto' : 'smooth' });
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      window.scrollTo({ top: max, behavior: shouldReduceMotion ? 'auto' : 'smooth' });
+    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp' || event.key === 'PageUp') {
+      event.preventDefault();
+      const delta = event.key === 'PageUp' ? el.clientHeight * 0.85 : step;
+      window.scrollTo({
+        top: Math.max(0, el.scrollTop - delta),
+        behavior: shouldReduceMotion ? 'auto' : 'smooth',
+      });
+    } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown' || event.key === 'PageDown') {
+      event.preventDefault();
+      const delta = event.key === 'PageDown' ? el.clientHeight * 0.85 : step;
+      window.scrollTo({
+        top: Math.min(max, el.scrollTop + delta),
+        behavior: shouldReduceMotion ? 'auto' : 'smooth',
+      });
+    }
+  };
+
   return (
     <div className="app-shell">
-      <motion.div
-        className="scroll-progress"
-        style={{ scaleX: scrollProgress }}
-        aria-hidden
-      />
+      <div
+        ref={scrollTrackRef}
+        className="scroll-progress-track"
+        role="slider"
+        tabIndex={0}
+        aria-label="Scroll page"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(scrollProgress * 100)}
+        aria-valuetext={`${Math.round(scrollProgress * 100)} percent scrolled`}
+        onPointerDown={handleScrollTrackPointerDown}
+        onPointerMove={handleScrollTrackPointerMove}
+        onPointerUp={handleScrollTrackPointerUp}
+        onPointerCancel={handleScrollTrackPointerUp}
+        onKeyDown={handleScrollTrackKeyDown}
+      >
+        <div className="scroll-progress-inner">
+          <motion.div
+            className="scroll-progress-fill"
+            style={{ scaleX: scrollProgress }}
+            aria-hidden
+          />
+        </div>
+      </div>
 
       <motion.div
         className="ambient ambient-one"
@@ -532,44 +598,7 @@ function App() {
           </div>
         </motion.section>
 
-        <motion.section
-          id="projects"
-          className="content-section"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: '-120px' }}
-          variants={sectionFade}
-          transition={{ duration: 0.7 }}
-        >
-          <div className="container-custom">
-            <motion.div className="section-heading" variants={sectionStagger}>
-              <motion.span className="section-kicker" variants={sectionFade}>
-                Projects
-              </motion.span>
-              <motion.h2 variants={sectionFade}>
-                Platforms and products built for scale, reliability, and real-world impact.
-              </motion.h2>
-            </motion.div>
-
-            <motion.div className="project-grid" variants={sectionStagger}>
-              {projects.map((project) => (
-                <motion.article
-                  key={project.title}
-                  className="project-card glass-card interactive-card"
-                  variants={cardReveal}
-                  whileHover={cardHover}
-                >
-                  <div className="project-topline">
-                    <span>{project.accent}</span>
-                    <p>{project.year}</p>
-                  </div>
-                  <h3>{project.title}</h3>
-                  <p>{project.summary}</p>
-                </motion.article>
-              ))}
-            </motion.div>
-          </div>
-        </motion.section>
+        <Projects />
 
         <motion.section
           id="skills"
